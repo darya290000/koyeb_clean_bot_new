@@ -1,0 +1,6 @@
+requests
+<<<<<<< HEAD
+python-telegram-bot==13.7
+=======
+python-telegram-bot==13.15
+>>>>>>> d211a1a96076afe9a66e704a4aec1946d6e5af24
