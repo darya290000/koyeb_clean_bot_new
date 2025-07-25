@@ -1,1 +1,1 @@
-worker: python main.py
+worker: python binance_telegram_bot_ichimoku.py
