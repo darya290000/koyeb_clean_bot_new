@@ -7,10 +7,16 @@ from datetime import datetime
 import logging
 import time
 
+# -------------- این خط تست را اضافه کن -----------------
+requests.post(
+    "https://api.telegram.org/bot8136421090:AAFrb8RI6BQ2tH49YXX_5S32_W0yWfT04Cg/sendMessage",
+    json={"chat_id": "570096331", "text": "🚦 تست اجرای کد جدید main.py"}
+)
+# -------------------------------------------------------
+
 # تنظیم لاگ
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 class QuantumScalpingAI:
     def __init__(self):
         # تنظیمات تلگرام
