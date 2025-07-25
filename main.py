@@ -1,36 +1,71 @@
-import time
+import pandas as pd
+import numpy as np
 import requests
-from telegram import Bot
+import asyncio
+import json
+from datetime import datetime
+import logging
+import time
 
-BOT_TOKEN = "8136421090:AAFrb8RI6BQ2tH49YXX_5S32_W0yWfT04Cg"
-CHAT_ID = "570096331"
+# تنظیم لاگ
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-bot = Bot(token=BOT_TOKEN)
-
-def get_data():
-    url = 'https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=3m&limit=1'
-    data = requests.get(url).json()[0]
-    return {
-        "open": data[1],
-        "high": data[2],
-        "low": data[3],
-        "close": data[4],
-        "volume": data[5]
-    }
-
-while True:
-    d = get_data()
-    msg = f"""💎 BTCUSDT تحلیل ۳ دقیقه‌ای:
-
-⏰ زمان: {time.strftime('%Y-%m-%d | %H:%M:%S')}
-📈 قیمت باز شدن: {d['open']}
-📉 قیمت بسته شدن: {d['close']}
-🔺 بیشترین قیمت: {d['high']}
-🔻 کمترین قیمت: {d['low']}
-📊 حجم معامله: {d['volume']}"""
-    bot.send_message(chat_id=CHAT_ID, text=msg)
-    time.sleep(180)
-    def analyze_market(self, data, symbol="XRPUSDT"):
+class QuantumScalpingAI:
+    def __init__(self):
+        # تنظیمات تلگرام
+        self.telegram_token = "8136421090:AAFrb8RI6BQ2tH49YXX_5S32_W0yWfT04Cg"
+        self.chat_id = "570096331"
+        
+        # تنظیمات استراتژی
+        self.ema_fast = 9
+        self.ema_slow = 21
+        self.rsi_period = 14
+        self.position = None
+        self.last_signal_time = None
+        
+    def calculate_ema(self, prices, period):
+        """محاسبه EMA"""
+        prices = np.array(prices)
+        alpha = 2 / (period + 1)
+        ema = np.zeros_like(prices)
+        ema[0] = prices[0]
+        
+        for i in range(1, len(prices)):
+            ema[i] = alpha * prices[i] + (1 - alpha) * ema[i-1]
+        return ema
+    
+    def calculate_rsi(self, prices, period=14):
+        """محاسبه RSI"""
+        prices = np.array(prices)
+        deltas = np.diff(prices)
+        gains = np.where(deltas > 0, deltas, 0)
+        losses = np.where(deltas < 0, -deltas, 0)
+        
+        if len(gains) < period:
+            return 50
+            
+        avg_gain = np.mean(gains[-period:])
+        avg_loss = np.mean(losses[-period:])
+        
+        if avg_loss == 0:
+            return 100
+            
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi
+    
+    def calculate_macd(self, prices):
+        """محاسبه MACD"""
+        if len(prices) < 26:
+            return 0, 0
+            
+        ema12 = self.calculate_ema(prices, 12)
+        ema26 = self.calculate_ema(prices, 26)
+        macd_line = ema12[-1] - ema26[-1]
+        
+        # MACD Signal
+            def analyze_market(self, data, symbol="XRPUSDT"):
         """تحلیل بازار"""
         closes = data['closes']
         
@@ -216,3 +251,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+        macd_values = ema12[-9:] - ema26[-9:] if 
