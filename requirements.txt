@@ -1,4 +1,4 @@
 aiohttp
 python-binance
 pandas
-pandas-ta
+pandas_ta
