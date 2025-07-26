@@ -1,21 +1,17 @@
 import asyncio
 import aiohttp
 from datetime import datetime
-from binance import AsyncClient, BinanceSocketManager
+from binance import AsyncClient
 import pandas as pd
 import pandas_ta as ta
 
-# تنظیمات توکن و چت تلگرام
 TELEGRAM_TOKEN = "8136421090:AAFrb8RI6BQ2tH49YXX_5S32_W0yWfT04Cg"
 CHAT_ID = 570096331
-
 API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
-# لیست کوین‌ها و تایم‌فریم
 COINS = ["BTCUSDT", "ETHUSDT", "XRPUSDT", "ADAUSDT", "SOLUSDT"]
 TIMEFRAME = "15m"
 
-# تابع ارسال پیام به تلگرام
 async def send_telegram_message(text):
     async with aiohttp.ClientSession() as session:
         params = {
@@ -28,25 +24,22 @@ async def send_telegram_message(text):
             if resp.status != 200:
                 print(f"Error sending message: {resp.status}")
             else:
-                print(f"Message sent for coin")
+                print(f"Message sent successfully")
 
-# تابع دریافت داده کندل از Binance
 async def fetch_klines(client, symbol, interval, limit=100):
     klines = await client.get_klines(symbol=symbol, interval=interval, limit=limit)
+    # هر کندل یک لیست هست، پس باید به DataFrame تبدیل کنیم
     df = pd.DataFrame(klines, columns=[
         "open_time", "open", "high", "low", "close", "volume",
         "close_time", "quote_asset_volume", "number_of_trades",
         "taker_buy_base_asset_volume", "taker_buy_quote_asset_volume", "ignore"
     ])
-    df["open"] = df["open"].astype(float)
-    df["high"] = df["high"].astype(float)
-    df["low"] = df["low"].astype(float)
-    df["close"] = df["close"].astype(float)
-    df["volume"] = df["volume"].astype(float)
+    # تبدیل نوع ستون‌ها به float و زمان به datetime
+    for col in ["open", "high", "low", "close", "volume"]:
+        df[col] = df[col].astype(float)
     df["open_time"] = pd.to_datetime(df["open_time"], unit='ms')
     return df
 
-# محاسبه اندیکاتورها
 def calculate_indicators(df):
     df["EMA9"] = ta.ema(df["close"], length=9)
     df["EMA21"] = ta.ema(df["close"], length=21)
@@ -55,7 +48,6 @@ def calculate_indicators(df):
     df["MACD"] = macd["MACD_12_26_9"]
     df["MACD_signal"] = macd["MACDs_12_26_9"]
 
-    # Ichimoku
     ich = ta.ichimoku(df["high"], df["low"], df["close"])
     df["tenkan_sen"] = ich["ISA_9"]
     df["kijun_sen"] = ich["ISB_26"]
@@ -65,14 +57,13 @@ def calculate_indicators(df):
 
     return df
 
-# تحلیل سیگنال ترکیبی
 def analyze_signal(df):
     last = df.iloc[-1]
     prev = df.iloc[-2]
 
     signals = []
 
-    # EMA crossover
+    # EMA کراس
     if last["EMA9"] > last["EMA21"] and prev["EMA9"] <= prev["EMA21"]:
         signals.append("خرید (EMA کراس صعودی)")
     elif last["EMA9"] < last["EMA21"] and prev["EMA9"] >= prev["EMA21"]:
@@ -84,13 +75,13 @@ def analyze_signal(df):
     elif last["RSI"] < 30:
         signals.append("اشباع فروش (RSI پایین)")
 
-    # MACD crossover
+    # MACD کراس
     if last["MACD"] > last["MACD_signal"] and prev["MACD"] <= prev["MACD_signal"]:
         signals.append("خرید (MACD کراس صعودی)")
     elif last["MACD"] < last["MACD_signal"] and prev["MACD"] >= prev["MACD_signal"]:
         signals.append("فروش (MACD کراس نزولی)")
 
-    # Ichimoku سیگنال ساده (تنکان سن بالاتر از کیجون سن)
+    # Ichimoku ساده
     if last["tenkan_sen"] > last["kijun_sen"]:
         signals.append("روند صعودی (Ichimoku)")
     else:
@@ -98,17 +89,14 @@ def analyze_signal(df):
 
     return signals
 
-# ساخت پیام کامل سیگنال
 def build_message(symbol, df, signals):
     last = df.iloc[-1]
     now = datetime.utcnow().strftime("%Y-%m-%d | %H:%M UTC")
 
-    # محاسبه حد سود و ضرر فرضی
     entry_price = last["close"]
-    tp = round(entry_price * 1.01, 4)  # حد سود 1%
-    sl = round(entry_price * 0.99, 4)  # حد ضرر 1%
+    tp = round(entry_price * 1.01, 4)  
+    sl = round(entry_price * 0.99, 4)  
 
-    # لوگوی هر کوین
     logos = {
         "BTCUSDT": "₿",
         "ETHUSDT": "Ξ",
@@ -146,7 +134,6 @@ def build_message(symbol, df, signals):
     )
     return msg
 
-# حلقه اصلی برنامه
 async def main_loop():
     client = await AsyncClient.create()
     while True:
@@ -157,11 +144,11 @@ async def main_loop():
                 signals = analyze_signal(df)
                 msg = build_message(coin, df, signals)
                 await send_telegram_message(msg)
-                await asyncio.sleep(1)  # یک ثانیه وقفه بین ارسال‌ها
+                await asyncio.sleep(1)
             except Exception as e:
                 print(f"Error processing {coin}: {e}")
         print(f"[{datetime.utcnow()}] تمام سیگنال‌ها ارسال شدند، منتظر 15 دقیقه بعد...")
-        await asyncio.sleep(15 * 60)  # 15 دقیقه
+        await asyncio.sleep(15 * 60)
 
 if __name__ == "__main__":
     print("🚀 ربات Quantum Scalping AI چندکوینه شروع به کار کرد...")
