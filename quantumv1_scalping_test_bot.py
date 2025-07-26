@@ -2,7 +2,7 @@ import asyncio
 import aiohttp
 import datetime
 
-# توکن و شناسه چت تلگرام (تو این نسخه تستی داخل کد ثابت هستند)
+# توکن و شناسه چت تلگرام (نسخه تستی)
 TELEGRAM_TOKEN = "8136421090:AAFrb8RI6BQ2tH49YXX_5S32_W0yWfT04Cg"
 CHAT_ID = 570096331
 
@@ -15,13 +15,14 @@ async def send_telegram_message(text: str):
             "chat_id": CHAT_ID,
             "text": text,
             "parse_mode": "Markdown",
-            "disable_web_page_preview": True,
+            "disable_web_page_preview": "true",  # تبدیل به رشته
         }
         async with session.post(API_URL, params=params) as resp:
             if resp.status != 200:
-                print(f"خطا در ارسال پیام: {resp.status}")
+                print(f"❌ خطا در ارسال پیام: {resp.status}")
+                print(await resp.text())
             else:
-                print("پیام با موفقیت ارسال شد.")
+                print("✅ پیام با موفقیت ارسال شد.")
 
 # تابع ساخت پیام تحلیل نمونه با قالب حرفه‌ای
 def build_analysis_message():
@@ -90,8 +91,8 @@ async def main_loop():
         msg = build_analysis_message()
         await send_telegram_message(msg)
         print(f"[{datetime.datetime.now()}] پیام ارسال شد، منتظر 15 دقیقه بعد...")
-        await asyncio.sleep(15 * 60)  # 15 دقیقه
+        await asyncio.sleep(15 * 60)  # هر 15 دقیقه
 
 if __name__ == "__main__":
-    print("ربات تستی Quantum Scalping AI شروع به کار کرد...")
+    print("🚀 ربات تستی Quantum Scalping AI شروع به کار کرد...")
     asyncio.run(main_loop())
