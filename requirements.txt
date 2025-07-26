@@ -1,5 +1,5 @@
 numpy==1.23.5
-pandas_ta
+pandas
 aiohttp
 python-binance
-pandas
+pandas_ta
