@@ -62,6 +62,7 @@ def calculate_indicators(df):
     df["senkou_span_a"] = ich["SSA_26"]
     df["senkou_span_b"] = ich["SSB_52"]
     df["chikou_span"] = ich["CL_26"]
+
     return df
 
 # تحلیل سیگنال ترکیبی
@@ -89,7 +90,7 @@ def analyze_signal(df):
     elif last["MACD"] < last["MACD_signal"] and prev["MACD"] >= prev["MACD_signal"]:
         signals.append("فروش (MACD کراس نزولی)")
 
-    # Ichimoku سیگنال ساده (مثلا تنکان بالای کیجون)
+    # Ichimoku سیگنال ساده (تنکان سن بالاتر از کیجون سن)
     if last["tenkan_sen"] > last["kijun_sen"]:
         signals.append("روند صعودی (Ichimoku)")
     else:
