@@ -243,11 +243,11 @@ def safe_round(value, decimals=4):
 
 def build_message(symbol, df, signals):
     """
-    ساخت پیام تلگرام با MarkdownV2
+    ساخت پیام تلگرام با سیستم تأیید اعتبار
     """
     try:
         last = df.iloc[-1]
-        now = datetime.utcnow().strftime("%Y-%m-%d | %H:%M UTC")
+        now = datetime.utcnow()
 
         entry_price = safe_round(last["close"])
         if entry_price != "N/A":
@@ -266,19 +266,26 @@ def build_message(symbol, df, signals):
         }
         logo = logos.get(symbol, "")
 
+        # تولید شناسه یکتا
+        signal_hash = generate_signal_hash(symbol, now, entry_price)
+        
+        # اطلاعات تأیید کندل
+        verification_info = get_candle_verification_info(df)
+        data_age_minutes = int(verification_info['data_freshness'] / 60)
+        
         # Escape کردن سیگنال‌ها
         signals_escaped = []
         for s in signals:
             signals_escaped.append(escape_markdown_v2(s))
         signals_text = "\\- " + "\n\\- ".join(signals_escaped)
 
-        # ساخت پیام با فرمت صحیح
+        # ساخت پیام با اطلاعات تأیید
         msg = f"""{logo} 🤖 ربات ارسال‌کننده: ALIASADI04925BOT
 📂 فایل/نسخه: quantumv2\\_multi\\_coin\\_bot\\.py
 
 💎 تحلیل رمزارز {escape_markdown_v2(symbol)}
 
-⏰ زمان: {escape_markdown_v2(now)} \\| تایم فریم: {escape_markdown_v2(TIMEFRAME)}
+⏰ زمان: {escape_markdown_v2(now.strftime('%Y-%m-%d | %H:%M:%S UTC'))} \\| تایم فریم: {escape_markdown_v2(TIMEFRAME)}
 
 📈 قیمت باز شدن: {escape_markdown_v2(safe_round(last['open']))}
 📉 قیمت بسته شدن: {escape_markdown_v2(safe_round(last['close']))}
@@ -299,11 +306,23 @@ def build_message(symbol, df, signals):
 🎯 حد سود \\(TP\\): {escape_markdown_v2(tp)}
 🛑 حد ضرر \\(SL\\): {escape_markdown_v2(sl)}
 
+🔐 *اطلاعات تأیید اعتبار:*
+\\- 🆔 شناسه سیگنال: `{signal_hash}`
+\\- 📡 منبع داده: Binance Spot API \\(زنده\\)
+\\- ⏱️ آخرین کندل: {escape_markdown_v2(last['open_time'].strftime('%H:%M UTC'))} \\({data_age_minutes} دقیقه پیش\\)
+\\- 📊 تعداد کندل: {verification_info['total_candles']} کندل
+
+🔍 *راه‌های تأیید:*
+\\- [چارت زنده Binance](https://www\\.binance\\.com/en/trade/{symbol})
+\\- [مقایسه TradingView](https://www\\.tradingview\\.com/chart/\\?symbol\\=BINANCE\\:{symbol})
+
 ⚠️ وضعیت گماشته محافظ: سیگنال تایید شده ✅
 \\- تحلیل ریسک: متوسط
 \\- توصیه امنیتی: رعایت حد ضرر و مدیریت ریسک
 
-🚀 Quantum Scalping AI \\- نسخه حرفه‌ای چندکوینه"""
+🚀 Quantum Scalping AI \\- نسخه حرفه‌ای چندکوینه
+
+💡 *این سیگنال براساس داده‌های واقعی و زنده Binance تولید شده است\\.*"""
         
         return msg
         
