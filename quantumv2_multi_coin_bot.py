@@ -24,8 +24,20 @@ def escape_markdown_v2(text):
     """
     Escape کردن کاراکترهای خاص برای MarkdownV2
     """
+    if text is None or text == "N/A":
+        return "N/A"
+    
+    # تبدیل به رشته
+    text = str(text)
+    
+    # کاراکترهای خاص که باید escape شوند
     escape_chars = r'_*[]()~`>#+-=|{}.!'
-    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', str(text))
+    
+    # Escape کردن کاراکترهای خاص
+    for char in escape_chars:
+        text = text.replace(char, f'\\{char}')
+    
+    return text
 
 async def send_telegram_message(text, max_retries=MAX_RETRIES):
     """
@@ -255,34 +267,43 @@ def build_message(symbol, df, signals):
         logo = logos.get(symbol, "")
 
         # Escape کردن سیگنال‌ها
-        signals_escaped = [escape_markdown_v2(s) for s in signals]
-        signals_text = "\\- " + "\\n\\- ".join(signals_escaped)
+        signals_escaped = []
+        for s in signals:
+            signals_escaped.append(escape_markdown_v2(s))
+        signals_text = "\\- " + "\n\\- ".join(signals_escaped)
 
-        # ساخت پیام با Escape کردن کاراکترهای خاص
-        msg = (
-            f"{logo} 🤖 ربات ارسال‌کننده: ALIASADI04925BOT\\n"
-            f"📂 فایل/نسخه: quantumv2\\_multi\\_coin\\_bot\\.py\\n\\n" 
-            f"💎 تحلیل رمزارز {escape_markdown_v2(symbol)}\\n\\n"
-            f"⏰ زمان: {escape_markdown_v2(now)} \\| تایم فریم: {escape_markdown_v2(TIMEFRAME)}\\n\\n"
-            f"📈 قیمت باز شدن: {escape_markdown_v2(safe_round(last['open']))}\\n"
-            f"📉 قیمت بسته شدن: {escape_markdown_v2(safe_round(last['close']))}\\n"
-            f"🔺 بیشترین قیمت: {escape_markdown_v2(safe_round(last['high']))}\\n"
-            f"🔻 کمترین قیمت: {escape_markdown_v2(safe_round(last['low']))}\\n"
-            f"📊 حجم معامله: {escape_markdown_v2(safe_round(last['volume'], 0))}\\n\\n"
-            f"📊 شاخص‌ها:\\n"
-            f"\\- EMA9: {escape_markdown_v2(safe_round(last['EMA9']))}\\n"
-            f"\\- EMA21: {escape_markdown_v2(safe_round(last['EMA21']))}\\n"
-            f"\\- RSI: {escape_markdown_v2(safe_round(last['RSI'], 2))}\\n"
-            f"\\- MACD: {escape_markdown_v2(safe_round(last['MACD'], 5))}\\n"
-            f"\\- MACD سیگنال: {escape_markdown_v2(safe_round(last['MACD_signal'], 5))}\\n\\n"
-            f"📉 سیگنال‌ها:\\n{signals_text}\\n\\n"
-            f"🎯 حد سود \\(TP\\): {escape_markdown_v2(tp)}\\n"
-            f"🛑 حد ضرر \\(SL\\): {escape_markdown_v2(sl)}\\n\\n"
-            f"⚠️ وضعیت گماشته محافظ: سیگنال تایید شده ✅\\n"
-            f"\\- تحلیل ریسک: متوسط\\n"
-            f"\\- توصیه امنیتی: رعایت حد ضرر و مدیریت ریسک\\n\\n"
-            f"🚀 Quantum Scalping AI \\- نسخه حرفه‌ای چندکوینه"
-        )
+        # ساخت پیام با فرمت صحیح
+        msg = f"""{logo} 🤖 ربات ارسال‌کننده: ALIASADI04925BOT
+📂 فایل/نسخه: quantumv2\\_multi\\_coin\\_bot\\.py
+
+💎 تحلیل رمزارز {escape_markdown_v2(symbol)}
+
+⏰ زمان: {escape_markdown_v2(now)} \\| تایم فریم: {escape_markdown_v2(TIMEFRAME)}
+
+📈 قیمت باز شدن: {escape_markdown_v2(safe_round(last['open']))}
+📉 قیمت بسته شدن: {escape_markdown_v2(safe_round(last['close']))}
+🔺 بیشترین قیمت: {escape_markdown_v2(safe_round(last['high']))}
+🔻 کمترین قیمت: {escape_markdown_v2(safe_round(last['low']))}
+📊 حجم معامله: {escape_markdown_v2(safe_round(last['volume'], 0))}
+
+📊 شاخص‌ها:
+\\- EMA9: {escape_markdown_v2(safe_round(last['EMA9']))}
+\\- EMA21: {escape_markdown_v2(safe_round(last['EMA21']))}
+\\- RSI: {escape_markdown_v2(safe_round(last['RSI'], 2))}
+\\- MACD: {escape_markdown_v2(safe_round(last['MACD'], 5))}
+\\- MACD سیگنال: {escape_markdown_v2(safe_round(last['MACD_signal'], 5))}
+
+📉 سیگنال‌ها:
+{signals_text}
+
+🎯 حد سود \\(TP\\): {escape_markdown_v2(tp)}
+🛑 حد ضرر \\(SL\\): {escape_markdown_v2(sl)}
+
+⚠️ وضعیت گماشته محافظ: سیگنال تایید شده ✅
+\\- تحلیل ریسک: متوسط
+\\- توصیه امنیتی: رعایت حد ضرر و مدیریت ریسک
+
+🚀 Quantum Scalping AI \\- نسخه حرفه‌ای چندکوینه"""
         
         return msg
         
