@@ -1,6 +1,7 @@
 import asyncio
 import aiohttp
 from datetime import datetime
+import hashlib
 from binance import AsyncClient
 import pandas as pd
 import pandas_ta as ta
@@ -39,6 +40,41 @@ def escape_markdown_v2(text):
     
     return text
 
+def generate_signal_hash(symbol, timestamp, price):
+    """
+    تولید شناسه یکتا برای سیگنال
+    """
+    try:
+        data = f"{symbol}_{timestamp.strftime('%Y%m%d_%H%M')}_{price}"
+        return hashlib.md5(data.encode()).hexdigest()[:8].upper()
+    except Exception as e:
+        logger.error(f"خطا در تولید hash: {e}")
+        return "UNKNOWN"
+
+def get_candle_verification_info(df):
+    """
+    اطلاعات تأیید کندل
+    """
+    try:
+        last_candle_time = df.iloc[-1]['open_time']
+        current_time = datetime.utcnow()
+        
+        # محاسبه تازگی داده (به ثانیه)
+        time_diff = (current_time - last_candle_time.to_pydatetime()).total_seconds()
+        
+        return {
+            'total_candles': len(df),
+            'data_freshness': time_diff,
+            'last_candle_time': last_candle_time
+        }
+    except Exception as e:
+        logger.error(f"خطا در محاسبه اطلاعات تأیید: {e}")
+        return {
+            'total_candles': 0,
+            'data_freshness': 0,
+            'last_candle_time': datetime.utcnow()
+        }
+
 async def send_telegram_message(text, max_retries=MAX_RETRIES):
     """
     ارسال پیام تلگرام با مدیریت خطا
@@ -48,7 +84,7 @@ async def send_telegram_message(text, max_retries=MAX_RETRIES):
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
                 params = {
                     "chat_id": str(CHAT_ID),
-                    "text": str(text),  # text قبلاً escape شده است
+                    "text": str(text),
                     "parse_mode": "MarkdownV2",
                     "disable_web_page_preview": "true",
                 }
@@ -65,7 +101,7 @@ async def send_telegram_message(text, max_retries=MAX_RETRIES):
                         if "parse" in error_text.lower() or "markdown" in error_text.lower():
                             params_plain = {
                                 "chat_id": str(CHAT_ID),
-                                "text": text.replace("\\", "").replace("*", "").replace("_", ""),  # حذف کاراکترهای فرمت
+                                "text": text.replace("\\", "").replace("*", "").replace("_", ""),
                                 "disable_web_page_preview": "true",
                             }
                             async with session.post(API_URL, params=params_plain) as retry_resp:
@@ -79,7 +115,7 @@ async def send_telegram_message(text, max_retries=MAX_RETRIES):
         except Exception as e:
             logger.error(f"خطا در تلاش {attempt + 1}: {e}")
             if attempt < max_retries - 1:
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                await asyncio.sleep(2 ** attempt)
     
     return False
 
@@ -90,7 +126,7 @@ async def fetch_klines(client, symbol, interval, limit=100):
     try:
         klines = await client.get_klines(symbol=symbol, interval=interval, limit=limit)
         
-        if not klines or len(klines) < 52:  # حداقل 52 کندل برای Ichimoku
+        if not klines or len(klines) < 52:
             logger.warning(f"داده‌های کافی برای {symbol} موجود نیست")
             return None
             
@@ -143,9 +179,8 @@ def calculate_indicators(df):
             df["MACD"] = None
             df["MACD_signal"] = None
         
-        # Ichimoku - محاسبه دستی برای جلوگیری از خطا
+        # Ichimoku - محاسبه دستی
         try:
-            # محاسبه دستی Ichimoku
             high_9 = df['high'].rolling(window=9).max()
             low_9 = df['low'].rolling(window=9).min()
             df['tenkan_sen'] = (high_9 + low_9) / 2
@@ -164,7 +199,6 @@ def calculate_indicators(df):
             
         except Exception as e:
             logger.warning(f"خطا در محاسبه Ichimoku: {e}")
-            # مقادیر پیش‌فرض اگر Ichimoku محاسبه نشد
             for col in ["tenkan_sen", "kijun_sen", "senkou_span_a", "senkou_span_b", "chikou_span"]:
                 df[col] = None
         
@@ -172,7 +206,6 @@ def calculate_indicators(df):
         
     except Exception as e:
         logger.error(f"خطا در محاسبه اندیکاتورها: {e}")
-        # در صورت خطا، ستون‌های خالی اضافه کن
         for col in ["EMA9", "EMA21", "RSI", "MACD", "MACD_signal", "tenkan_sen", "kijun_sen", "senkou_span_a", "senkou_span_b", "chikou_span"]:
             if col not in df.columns:
                 df[col] = None
@@ -190,8 +223,6 @@ def analyze_signal(df):
         prev = df.iloc[-2]
         signals = []
 
-        # بررسی وجود داده‌ها قبل از تحلیل
-        
         # EMA کراس
         if not pd.isna(last["EMA9"]) and not pd.isna(last["EMA21"]) and not pd.isna(prev["EMA9"]) and not pd.isna(prev["EMA21"]):
             if last["EMA9"] > last["EMA21"] and prev["EMA9"] <= prev["EMA21"]:
@@ -212,7 +243,7 @@ def analyze_signal(df):
             if last["MACD"] > last["MACD_signal"] and prev["MACD"] <= prev["MACD_signal"]:
                 signals.append("خرید (MACD کراس صعودی)")
             elif last["MACD"] < last["MACD_signal"] and prev["MACD"] >= prev["MACD_signal"]:
-                signals.append("فروش (MACD کراس نزولی)")
+                signals.append("فروش (MACD کراส نزولی)")
 
         # Ichimoku ساده
         if not pd.isna(last["tenkan_sen"]) and not pd.isna(last["kijun_sen"]):
@@ -243,14 +274,18 @@ def safe_round(value, decimals=4):
 
 def build_message(symbol, df, signals):
     """
-    ساخت پیام تلگرام با سیستم تأیید اعتبار
+    ساخت پیام تلگرام با سیستم تأیید اعتبار - نسخه اصلاح شده
     """
     try:
+        if df is None or len(df) == 0:
+            logger.error(f"DataFrame خالی برای {symbol}")
+            return f"خطا: داده‌ای برای {symbol} موجود نیست"
+        
         last = df.iloc[-1]
         now = datetime.utcnow()
 
         entry_price = safe_round(last["close"])
-        if entry_price != "N/A":
+        if entry_price != "N/A" and isinstance(entry_price, (int, float)):
             tp = safe_round(float(entry_price) * 1.01, 4)
             sl = safe_round(float(entry_price) * 0.99, 4)
         else:
@@ -264,20 +299,33 @@ def build_message(symbol, df, signals):
             "ADAUSDT": "₳",
             "SOLUSDT": "◎"
         }
-        logo = logos.get(symbol, "")
+        logo = logos.get(symbol, "💎")
 
         # تولید شناسه یکتا
         signal_hash = generate_signal_hash(symbol, now, entry_price)
         
         # اطلاعات تأیید کندل
         verification_info = get_candle_verification_info(df)
-        data_age_minutes = int(verification_info['data_freshness'] / 60)
+        data_age_minutes = max(1, int(verification_info['data_freshness'] / 60))
         
         # Escape کردن سیگنال‌ها
         signals_escaped = []
         for s in signals:
-            signals_escaped.append(escape_markdown_v2(s))
+            if s and str(s).strip():
+                signals_escaped.append(escape_markdown_v2(str(s)))
+        
+        if not signals_escaped:
+            signals_escaped = [escape_markdown_v2("هیچ سیگنال خاصی شناسایی نشد")]
+            
         signals_text = "\\- " + "\n\\- ".join(signals_escaped)
+
+        # بررسی و تصحیح مقادیر اندیکاتورها
+        indicators = {}
+        for key in ['open', 'close', 'high', 'low', 'volume', 'EMA9', 'EMA21', 'RSI', 'MACD', 'MACD_signal']:
+            if key in last:
+                indicators[key] = safe_round(last[key], 2 if key == 'RSI' else (5 if 'MACD' in key else 4))
+            else:
+                indicators[key] = "N/A"
 
         # ساخت پیام با اطلاعات تأیید
         msg = f"""{logo} 🤖 ربات ارسال‌کننده: ALIASADI04925BOT
@@ -287,29 +335,29 @@ def build_message(symbol, df, signals):
 
 ⏰ زمان: {escape_markdown_v2(now.strftime('%Y-%m-%d | %H:%M:%S UTC'))} \\| تایم فریم: {escape_markdown_v2(TIMEFRAME)}
 
-📈 قیمت باز شدن: {escape_markdown_v2(safe_round(last['open']))}
-📉 قیمت بسته شدن: {escape_markdown_v2(safe_round(last['close']))}
-🔺 بیشترین قیمت: {escape_markdown_v2(safe_round(last['high']))}
-🔻 کمترین قیمت: {escape_markdown_v2(safe_round(last['low']))}
-📊 حجم معامله: {escape_markdown_v2(safe_round(last['volume'], 0))}
+📈 قیمت باز شدن: {escape_markdown_v2(str(indicators['open']))}
+📉 قیمت بسته شدن: {escape_markdown_v2(str(indicators['close']))}
+🔺 بیشترین قیمت: {escape_markdown_v2(str(indicators['high']))}
+🔻 کمترین قیمت: {escape_markdown_v2(str(indicators['low']))}
+📊 حجم معامله: {escape_markdown_v2(str(safe_round(indicators['volume'], 0)))}
 
 📊 شاخص‌ها:
-\\- EMA9: {escape_markdown_v2(safe_round(last['EMA9']))}
-\\- EMA21: {escape_markdown_v2(safe_round(last['EMA21']))}
-\\- RSI: {escape_markdown_v2(safe_round(last['RSI'], 2))}
-\\- MACD: {escape_markdown_v2(safe_round(last['MACD'], 5))}
-\\- MACD سیگنال: {escape_markdown_v2(safe_round(last['MACD_signal'], 5))}
+\\- EMA9: {escape_markdown_v2(str(indicators['EMA9']))}
+\\- EMA21: {escape_markdown_v2(str(indicators['EMA21']))}
+\\- RSI: {escape_markdown_v2(str(indicators['RSI']))}
+\\- MACD: {escape_markdown_v2(str(indicators['MACD']))}
+\\- MACD سیگنال: {escape_markdown_v2(str(indicators['MACD_signal']))}
 
 📉 سیگنال‌ها:
 {signals_text}
 
-🎯 حد سود \\(TP\\): {escape_markdown_v2(tp)}
-🛑 حد ضرر \\(SL\\): {escape_markdown_v2(sl)}
+🎯 حد سود \\(TP\\): {escape_markdown_v2(str(tp))}
+🛑 حد ضرر \\(SL\\): {escape_markdown_v2(str(sl))}
 
 🔐 *اطلاعات تأیید اعتبار:*
 \\- 🆔 شناسه سیگنال: `{signal_hash}`
 \\- 📡 منبع داده: Binance Spot API \\(زنده\\)
-\\- ⏱️ آخرین کندل: {escape_markdown_v2(last['open_time'].strftime('%H:%M UTC'))} \\({data_age_minutes} دقیقه پیش\\)
+\\- ⏱️ آخرین کندل: {escape_markdown_v2(verification_info['last_candle_time'].strftime('%H:%M UTC') if hasattr(verification_info['last_candle_time'], 'strftime') else str(verification_info['last_candle_time']))} \\({data_age_minutes} دقیقه پیش\\)
 \\- 📊 تعداد کندل: {verification_info['total_candles']} کندل
 
 🔍 *راه‌های تأیید:*
@@ -327,24 +375,35 @@ def build_message(symbol, df, signals):
         return msg
         
     except Exception as e:
-        logger.error(f"خطا در ساخت پیام: {e}")
-        return f"خطا در ساخت پیام برای {symbol}"
+        logger.error(f"خطا در ساخت پیام برای {symbol}: {e}")
+        # ساخت پیام ساده در صورت خطا
+        try:
+            simple_msg = f"❌ خطا در تحلیل {symbol}\n🕐 زمان: {datetime.utcnow().strftime('%H:%M UTC')}\n⚠️ لطفاً مجدداً تلاش کنید"
+            return simple_msg
+        except:
+            return f"خطا کامل در ساخت پیام برای {symbol}"
 
 async def process_coin(client, coin):
     """
-    پردازش یک کوین
+    پردازش یک کوین - نسخه اصلاح شده
     """
     try:
         logger.info(f"در حال پردازش {coin}...")
         df = await fetch_klines(client, coin, TIMEFRAME)
         
-        if df is None:
+        if df is None or len(df) == 0:
             logger.warning(f"داده‌ای برای {coin} دریافت نشد")
+            error_msg = f"❌ خطا در دریافت داده‌های {coin}\n🕐 {datetime.utcnow().strftime('%H:%M UTC')}"
+            await send_telegram_message(error_msg)
             return False
             
         df = calculate_indicators(df)
         signals = analyze_signal(df)
         msg = build_message(coin, df, signals)
+        
+        if "خطا" in msg:
+            logger.error(f"خطا در ساخت پیام {coin}")
+            return False
         
         success = await send_telegram_message(msg)
         if success:
@@ -356,6 +415,11 @@ async def process_coin(client, coin):
         
     except Exception as e:
         logger.error(f"خطا در پردازش {coin}: {e}")
+        try:
+            error_msg = f"❌ خطای کلی در پردازش {coin}\n🕐 {datetime.utcnow().strftime('%H:%M UTC')}\n📝 {str(e)[:100]}"
+            await send_telegram_message(error_msg)
+        except:
+            pass
         return False
 
 async def main_loop():
@@ -372,10 +436,14 @@ async def main_loop():
             successful_sends = 0
             
             for coin in COINS:
-                success = await process_coin(client, coin)
-                if success:
-                    successful_sends += 1
-                await asyncio.sleep(2)  # فاصله بین کوین‌ها
+                try:
+                    success = await process_coin(client, coin)
+                    if success:
+                        successful_sends += 1
+                    await asyncio.sleep(2)
+                except Exception as e:
+                    logger.error(f"خطا در پردازش {coin} در حلقه اصلی: {e}")
+                    continue
             
             logger.info(f"تحلیل تمام شد. {successful_sends}/{len(COINS)} پیام ارسال شد")
             logger.info(f"منتظر 15 دقیقه بعدی... [{datetime.utcnow()}]")
