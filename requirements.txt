@@ -1,4 +1,4 @@
 aiohttp
-requests
+python-binance
 pandas
-numpy
+pandas-ta
