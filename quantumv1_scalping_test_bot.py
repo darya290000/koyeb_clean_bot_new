@@ -2,22 +2,22 @@ import asyncio
 import aiohttp
 import datetime
 
-# توکن و شناسه چت تلگرام (نسخه تستی)
+# توکن و شناسه چت تلگرام (تو این نسخه تستی داخل کد ثابت هستند)
 TELEGRAM_TOKEN = "8136421090:AAFrb8RI6BQ2tH49YXX_5S32_W0yWfT04Cg"
 CHAT_ID = 570096331
 
 API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
-# تابع ارسال پیام به تلگرام
+# تابع ارسال پیام به تلگرام (بدون parse_mode برای جلوگیری از خطای Markdown)
 async def send_telegram_message(text: str):
     async with aiohttp.ClientSession() as session:
-        params = {
+        payload = {
             "chat_id": CHAT_ID,
             "text": text,
-            "parse_mode": "Markdown",
-            "disable_web_page_preview": "true",  # تبدیل به رشته
+            # "parse_mode": "Markdown",  # غیرفعال شد تا خطا رفع شود
+            "disable_web_page_preview": True
         }
-        async with session.post(API_URL, params=params) as resp:
+        async with session.post(API_URL, json=payload) as resp:
             if resp.status != 200:
                 print(f"❌ خطا در ارسال پیام: {resp.status}")
                 print(await resp.text())
@@ -91,7 +91,7 @@ async def main_loop():
         msg = build_analysis_message()
         await send_telegram_message(msg)
         print(f"[{datetime.datetime.now()}] پیام ارسال شد، منتظر 15 دقیقه بعد...")
-        await asyncio.sleep(15 * 60)  # هر 15 دقیقه
+        await asyncio.sleep(15 * 60)  # 15 دقیقه
 
 if __name__ == "__main__":
     print("🚀 ربات تستی Quantum Scalping AI شروع به کار کرد...")
